@@ -1,9 +1,3 @@
-# ==============================================================================
-# КОМПЛЕКСНЫЙ КОНВЕЙЕР СБОРКИ МАСТЕР-ТАБЛИЦ
-# Модуль: Автоматический парсинг KEGG, GO (BP, CC, MF) и Mammalian Phenotype (MP)
-# ==============================================================================
-
-# 1. Автоматическая проверка, установка и загрузка необходимых пакетов
 required_packages <- c("openxlsx", "dplyr", "tidyr", "ggplot2", "stringr")
 new_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
 if(length(new_packages)) install.packages(new_packages)
@@ -13,28 +7,21 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 
-# ---------- НАСТРОЙКИ ПОЛЬЗОВАТЕЛЯ --------------------------------------------
 base_dir     <- "C:/Users/ES/Desktop/ФМБА/PTSD/Criteria_ORA/5 vs 6 EVS"
-ora_dir      <- file.path(base_dir, "ORA_results") # Папка для сохранения результатов ORA
-p_adj_cutoff <- 0.05                               # Порог значимости (FDR)
+ora_dir      <- file.path(base_dir, "ORA_results")
+p_adj_cutoff <- 0.05
 
-# Создаем подпапку результатов, если её ещё нет
 dir.create(ora_dir, showWarnings = FALSE, recursive = TRUE)
 
-# Находим все файлы результатов в исходной папке
 ora_files <- list.files(path = base_dir, pattern = "^ORA_KEGG_GO_.*\\.xlsx$", full.names = TRUE)
 
 if (length(ora_files) == 0) {
-  stop("Критическая ошибка: Файлы ORA_KEGG_GO_*.xlsx не найдены в папке: ", base_dir)
+  stop("Файлы ORA_KEGG_GO_*.xlsx не найдены в папке: ", base_dir)
 }
 
-cat("=== ЗАПУСК ПАЙПЛАЙНА СБОРКИ ДАННЫХ ===\n")
 cat("Найдено файлов для анализа: ", length(ora_files), "\n\n")
 
-# ==============================================================================
-# БЛОК 1. СБОР ДАННЫХ KEGG И ПОСТРОЕНИЕ МАСШТАБНОЙ ТАБЛИЦЫ KEGG
-# ==============================================================================
-cat("--- [ЭТАП 1/2] Парсинг путей KEGG ---\n")
+cat("--- Парсинг путей KEGG ---\n")
 master_kegg_list <- list()
 
 for (file_path in ora_files) {
@@ -70,24 +57,19 @@ if (length(master_kegg_list) > 0) {
   master_kegg <- bind_rows(master_kegg_list) %>%
     mutate(Cell_Type_Clean = gsub("5_vs_6_", "", Cell_Type))
   
-  # --- ДОБАВЛЕНИЕ АВТОФИЛЬТРОВ ДЛЯ KEGG ---
   wb_kegg <- createWorkbook()
   addWorksheet(wb_kegg, "KEGG_Master")
   writeData(wb_kegg, "KEGG_Master", master_kegg)
   
-  # Включаем фильтры: указываем лист, строки и колонки (от 1 до последней)
   addFilter(wb_kegg, "KEGG_Master", row = 1, cols = 1:ncol(master_kegg))
   
   saveWorkbook(wb_kegg, file = file.path(ora_dir, "MASTER_KEGG_ALL_CELL_TYPES.xlsx"), overwrite = TRUE)
-  cat("-> Успех: Мастер-таблица KEGG сохранена с АВТОФИЛЬТРАМИ.\n\n")
+  cat("-> Мастер-таблица KEGG сохранена.\n\n")
 } else {
-  cat("[Предупреждение]: Значимые данные KEGG не обнаружены.\n\n")
+  cat("Значимые данные KEGG не обнаружены.\n\n")
 }
 
-# ==============================================================================
-# БЛОК 2. СБОР ДАННЫХ GO И MP ИЗ СЛОЖНЫХ ДВУХБЛОЧНЫХ ЛИСТОВ
-# ==============================================================================
-cat("--- [ЭТАП 2/2] Парсинг онтологий GO и фенотипов MP ---\n")
+cat("--- Парсинг онтологий GO и фенотипов MP ---\n")
 master_go_list <- list()
 
 for (file_path in ora_files) {
@@ -112,7 +94,6 @@ for (file_path in ora_files) {
     go_start_idx <- which(apply(raw_sheet, 1, function(x) any(str_detect(na.omit(as.character(x)), "(?i)GO enrichment"))))
     mp_start_idx <- which(apply(raw_sheet, 1, function(x) any(str_detect(na.omit(as.character(x)), "(?i)Mammalian Phenotype"))))
     
-    # --- СУББЛОК 2А. ОБРАБОТКА ТАБЛИЦЫ GO ENRICHMENT ---
     if (length(go_start_idx) > 0) {
       go_header_row <- go_start_idx + 1
       go_end_row <- if(length(mp_start_idx) > 0) mp_start_idx - 1 else nrow(raw_sheet)
@@ -145,7 +126,6 @@ for (file_path in ora_files) {
       }
     }
     
-    # --- СУББЛОК 2Б. ОБРАБОТКА ТАБЛИЦЫ MAMMALIAN PHENOTYPE (MP) ---
     if (length(mp_start_idx) > 0) {
       mp_header_row <- mp_start_idx + 1
       mp_df <- read.xlsx(file_path, sheet = sheet_name, startRow = mp_header_row + 1, colNames = FALSE)
@@ -188,24 +168,21 @@ for (file_path in ora_files) {
   }
 }
 
-# Финальное объединение таблиц GO и MP с генерацией автофильтра
 if (length(master_go_list) > 0) {
   master_go <- bind_rows(master_go_list) %>%
     mutate(Cell_Type_Clean = gsub("5_vs_6_", "", Cell_Type))
   
-  # --- ДОБАВЛЕНИЕ АВТОФИЛЬТРОВ ДЛЯ GO/MP ---
   wb_go <- createWorkbook()
   addWorksheet(wb_go, "GO_MP_Master")
   writeData(wb_go, "GO_MP_Master", master_go)
   
-  # Включаем фильтры на первую строку для всех колонок таблицы
   addFilter(wb_go, "GO_MP_Master", row = 1, cols = 1:ncol(master_go))
   
   saveWorkbook(wb_go, file = file.path(ora_dir, "MASTER_GO_ALL_CELL_TYPES.xlsx"), overwrite = TRUE)
-  cat("-> Успех: Мастер-таблица GO/MP сохранена с АВТОФИЛЬТРАМИ.\n\n")
+  cat("-> Мастер-таблица GO/MP сохранена.\n\n")
 } else {
-  stop("Критическая ошибка: Данные GO/MP не были собраны.")
+  stop("Данные GO/MP не были собраны.")
 }
 
-cat("=== СБОРКА ОБОИХ МОДУЛЕЙ ЗАВЕРШЕНА УСПЕШНО ===\n")
+cat("=== УСПЕШНО ===\n")
 

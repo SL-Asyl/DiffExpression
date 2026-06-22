@@ -1,114 +1,77 @@
-# ==============================================================================
-# СКРИПТ ВЫГРУЗКИ СВОДНОЙ ТАБЛИЦЫ ДИФФЕРЕНЦИАЛЬНО ЭКСПРЕССИРОВАННЫХ ГЕНОВ (DEGs)
-# Модуль: Сбор значимых генов по индивидуальным вкладкам для каждого типа клеток
-# ==============================================================================
-
-# Автоматическая проверка и установка необходимых пакетов
-required_packages <- c("openxlsx", "dplyr", "stringr")
+required_packages <- c("openxlsx", "future.apply", "dplyr")
 new_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
 if(length(new_packages)) install.packages(new_packages)
 
 library(openxlsx)
+library(future.apply)
 library(dplyr)
-library(stringr)
 
-# ---------- НАСТРОЙКИ ПОЛЬЗОВАТЕЛЯ (USER INPUT) -------------------------------
-input_dir    <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 9 vs 10_ Egorova"     # Папка с исходными Excel файлами от секвенирования
-outdir       <- "C:/Users/ES/Desktop/ФМБА/PTSD/Criteria_ORA/9 vs 10 EVS/ORA_results"  # Папка для сохранения итогового сводного файла
+input_dir <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 5 vs 6_ Egorova"
+outdir    <- "C:/Users/ES/Desktop/ФМБА/PTSD/Criteria_ORA/5 vs 6 EVS/ORA_results"
 
-logFC_cutoff <- 1              # Порог изменения экспрессии (в 2 раза)
-FDR_cutoff   <- 0.05           # Порог значимости (FDR)
+logFC_cutoff <- 1
+FDR_cutoff   <- 0.05
 
-# Создаем папку для результатов, если её ещё нет
 dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
 
-# Находим все исходные файлы
-raw_files <- list.files(path = input_dir, pattern = "\\.xlsx$", full.names = TRUE)
+files <- list.files(input_dir, pattern = "\\.xlsx$", full.names = TRUE)
+if (length(files) == 0) stop("Нет файлов .xlsx")
 
-if (length(raw_files) == 0) {
-  stop("Критическая ошибка: не найдено файлов .xlsx в папке '", input_dir, "'. Проверьте путь!")
+cat("Файлов для обработки:", length(files), "\n")
+
+plan(multisession, workers = max(1, parallel::detectCores() - 1))
+
+process_file <- function(file_path) {
+  
+  cell_type <- basename(file_path)
+  cell_type <- sub(".xlsx$", "", cell_type)
+  cell_type <- sub("5_vs_6_", "", cell_type)
+  
+  tb_raw <- tryCatch(read.xlsx(file_path), error = function(e) NULL)
+  if (is.null(tb_raw)) return(NULL)
+  
+  tb <- data.frame(
+    gene = tb_raw$names,
+    log2FoldChange = tb_raw$logfoldchanges,
+    padj = tb_raw$pvals_adj,
+    stringsAsFactors = FALSE
+  )
+  
+  tb <- tb[complete.cases(tb), ]
+  if (nrow(tb) == 0) return(NULL)
+  
+  tb$log2FoldChange <- as.numeric(
+    sub(",", ".", trimws(tb$log2FoldChange))
+  )
+  
+  idx <- tb$padj < FDR_cutoff & abs(tb$log2FoldChange) >= logFC_cutoff
+  tb <- tb[idx, c("gene", "log2FoldChange", "padj")]
+  
+  if (nrow(tb) == 0) return(NULL)
+  
+  tb <- tb[order(-tb$log2FoldChange), ]
+  
+  tb$Cell_Type <- cell_type
+  
+  return(tb)
 }
 
-cat("=== ЗАПУСК ЭКСПОРТА СПИСКОВ ДИФФЕРЕНЦИАЛЬНЫХ ГЕНОВ ===\n")
-cat("Найдено файлов для обработки: ", length(raw_files), "\n\n")
+res <- future_lapply(files, process_file)
+res <- Filter(Negate(is.null), res)
 
-# Создаем единый воркбук Excel, куда будем складывать листы
-wb_all_degs <- createWorkbook()
-
-# ==============================================================================
-# ОСНОВНОЙ ЦИКЛ ОБРАБОТКИ ФАЙЛОВ
-# ==============================================================================
-for (file_path in raw_files) {
+if (length(res) > 0) {
+  master_table <- dplyr::bind_rows(res)
   
-  # Очищаем имя файла, чтобы получить чистое название типа клеток
-  cell_type_name <- gsub(".xlsx", "", basename(file_path))
-  cell_type_name <- gsub("5_vs_6_", "", cell_type_name) # убираем префикс сравнения, если есть
+  wb <- createWorkbook()
+  addWorksheet(wb, "Significant_DEGs")
+  writeData(wb, "Significant_DEGs", master_table)
+  setColWidths(wb, "Significant_DEGs", 1:ncol(master_table), widths = "auto")
+  addFilter(wb, "Significant_DEGs", row = 1, cols = 1:ncol(master_table))
   
-  # Excel ограничивает длину имени вкладки в 31 символ. Обрезаем, если имя слишком длинное
-  sheet_name <- substr(cell_type_name, 1, 31)
+  output_file <- file.path(outdir, "ALL_CELL_TYPES_SIGNIFICANT_DEGs.xlsx")
+  saveWorkbook(wb, output_file, overwrite = TRUE)
   
-  cat("Обработка кластера:", cell_type_name, "... ")
-  
-  # Чтение сырых данных с защитой от ошибок
-  tb_raw <- tryCatch({
-    read.xlsx(file_path)
-  }, error = function(e) {
-    cat("[ОШИБКА ЧТЕНИЯ] Пропуск.\n")
-    next
-  })
-  
-  # Стандартизация колонок и базовая очистка от NA
-  tb <- tb_raw %>%
-    rename(gene = names, log2FoldChange = logfoldchanges, padj = pvals_adj) %>%
-    select(gene, log2FoldChange, padj) %>%
-    filter(!is.na(gene), !is.na(log2FoldChange), !is.na(padj))
-  
-  if (nrow(tb) == 0) {
-    cat("[ТАБЛИЦА ПУСТАЯ после фильтрации NA] Пропуск.\n")
-    next
-  }
-  
-  # Фильтрация генов по порогам FDR и Log2FC
-  filtered_degs <- tb %>%
-    filter(padj < FDR_cutoff, abs(log2FoldChange) >= logFC_cutoff) %>%
-    # Добавляем текстовый маркер направления для удобства фильтрации в Excel
-    mutate(Direction = ifelse(log2FoldChange >= logFC_cutoff, "UP", "DOWN")) %>%
-    # Сортируем гены по силе изменения (сначала самые мощные UP, затем самые мощные DOWN)
-    arrange(desc(log2FoldChange)) %>%
-    # Красиво переупорядочиваем колонки
-    select(gene, Direction, log2FoldChange, padj)
-  
-  # Если значимых генов в этом типе клеток нет, вкладку не создаем
-  if (nrow(filtered_degs) == 0) {
-    cat("0 значимых генов. Пропуск.\n")
-    next
-  }
-  
-  # Запись данных на индивидуальный лист
-  addWorksheet(wb_all_degs, sheetName = sheet_name)
-  writeData(wb_all_degs, sheet = sheet_name, x = filtered_degs)
-  
-  # Программное включение кнопок-автофильтров на шапку таблицы
-  addFilter(wb_all_degs, sheet = sheet_name, row = 1, cols = 1:ncol(filtered_degs))
-  
-  # Делаем ширину колонок автоматической по размеру контента, чтобы текст не обрезался
-  setColWidths(wb_all_degs, sheet = sheet_name, cols = 1:ncol(filtered_degs), widths = "auto")
-  
-  cat("Успешно добавлено генов:", nrow(filtered_degs), "\n")
+  cat("Файл успешно сохранен:", output_file, "\n")
+} else {
+  cat("Значимых генов не обнаружено ни в одном файле.\n")
 }
-
-# ==============================================================================
-# СОХРАНЕНИЕ ИТОГОВОГО СВОДНОГО ФАЙЛА
-# ==============================================================================
-output_file <- file.path(outdir, "ALL_CELL_TYPES_SIGNIFICANT_DEGs.xlsx")
-
-tryCatch({
-  saveWorkbook(wb_all_degs, output_file, overwrite = TRUE)
-  cat("\n============================================================\n")
-  cat("СБОРКА ЗАВЕРШЕНА! Сводный файл сохранен в:\n")
-  cat(output_file, "\n")
-  cat("============================================================\n")
-}, error = function(e) {
-  message("\nКРИТИЧЕСКАЯ ОШИБКА: Не удалось сохранить итоговый файл. Закройте его, если он открыт в Excel!")
-})
-
