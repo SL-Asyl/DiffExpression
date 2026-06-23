@@ -1,7 +1,3 @@
-################################################################################
-#                           НАСТРОЙКИ / SETTINGS
-################################################################################
-
 # --- Пути ---
 degs_file <- "ALL_CELL_TYPES_SIGNIFICANT_DEGs.xlsx"
 heatmap_outdir <- "Results/Heatmaps"
@@ -51,9 +47,7 @@ color_up <- "#F39B7F"
 color_down <- "#4DBBD5"
 color_ns <- "#A6A6A6"
 
-################################################################################
-#                         УСТАНОВКА И ЗАГРУЗКА ПАКЕТОВ
-################################################################################
+# --- УСТАНОВКА И ЗАГРУЗКА ПАКЕТОВ ---
 
 required_packages <- c("openxlsx", "pheatmap", "ggplot2", "ggrepel",
                         "dplyr", "tidyr", "RColorBrewer", "grDevices")
@@ -69,9 +63,7 @@ library(dplyr)
 library(tidyr)
 library(grDevices)
 
-################################################################################
-#                     ГРУППИРОВКА КЛЕТОЧНЫХ ТИПОВ
-################################################################################
+# --- ГРУППИРОВКА КЛЕТОЧНЫХ ТИПОВ ---
 
 classify_cell_type <- function(ct) {
   if (grepl("_Glut$", ct)) return("Glutamatergic")
@@ -84,9 +76,7 @@ classify_cell_type <- function(ct) {
 
 group_order <- c("Glutamatergic", "GABAergic", "Glia", "Microglia")
 
-################################################################################
-#                          ЧТЕНИЕ ДАННЫХ
-################################################################################
+# --- ЧТЕНИЕ ДАННЫХ ---
 
 degs <- read.xlsx(degs_file)
 degs$Group <- sapply(degs$Cell_Type, classify_cell_type)
@@ -94,9 +84,7 @@ degs$Group <- sapply(degs$Cell_Type, classify_cell_type)
 cat("Загружено", nrow(degs), "DEGs из", length(unique(degs$Cell_Type)),
     "клеточных типов\n")
 
-################################################################################
-#                    ЗАДАЧА 1: ТЕПЛОВЫЕ КАРТЫ (HEATMAPS)
-################################################################################
+# --- ТЕПЛОВЫЕ КАРТЫ (HEATMAPS) ---
 
 dir.create(heatmap_outdir, showWarnings = FALSE, recursive = TRUE)
 
@@ -247,9 +235,7 @@ for (grp in group_order) {
 
 cat("\n=== Все тепловые карты построены ===\n\n")
 
-################################################################################
-#                    ЗАДАЧА 2: VOLCANO PLOTS
-################################################################################
+# --- ЗАДАЧА 2: VOLCANO PLOTS ---
 
 dir.create(volcano_outdir, showWarnings = FALSE, recursive = TRUE)
 
