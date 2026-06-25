@@ -8,6 +8,7 @@ if (length(missing_cran) > 0) {
   cat("Установка пропущенных пакетов CRAN:", paste(missing_cran, collapse = ", "), "\n")
   install.packages(missing_cran, dependencies = TRUE)
 }
+#
 
 library(BiocManager)
 missing_bioc <- bioc_packages[!(bioc_packages %in% installed.packages()[, "Package"])]
@@ -32,8 +33,8 @@ library(progressr)
 
 handlers(handler_txtprogressbar())
 
-input_dir  <- "исходный путь"
-output_dir <- "путь сохранения" 
+input_dir <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/10 vs 13"
+outdir    <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 10 vs 13 EVS"
 
 logFC_cutoff <- 1
 FDR_cutoff   <- 0.05
@@ -41,14 +42,14 @@ FDR_cutoff   <- 0.05
 mp_db <- "MGI_Mammalian_Phenotype_Level_4_2021"
 
 
-cell_type_clean_pattern <- "5_vs_6_" # если нужно убрать приставку для чистых названий
+cell_type_clean_pattern <- "10_vs_13_" # если нужно убрать приставку для чистых названий
 
 n_workers          <- 2          # количество параллельной обработки: не рекомендуется больше 3
 retry_max_tries    <- 3          # сколько раз повторить сетевой вызов при ошибке
 retry_wait_sec     <- 5          # базовая пауза перед повтором (растёт с каждой попыткой)
 jitter_range_sec   <- c(0.5, 2)  # случайная пауза перед каждым сетевым вызовом
 
-dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
 
 .symbol_cache <- new.env(parent = emptyenv())
 .entrez_cache <- new.env(parent = emptyenv())
@@ -162,8 +163,8 @@ format_kegg_master <- function(res, cell_type, direction) {
   df$Cell_Type <- cell_type
   df$Direction <- direction
   
-  df %>% select(ID, Description, GeneRatio, BgRatio, pvalue, p.adjust, qvalue,
-                Count, Genes, Cell_Type, Direction, GeneRatio_num)
+  df %>% dplyr::select(ID, Description, GeneRatio, BgRatio, pvalue, p.adjust, qvalue,
+                       Count, Genes, Cell_Type, Direction, GeneRatio_num)
 }
 
 format_go_master <- function(res, cell_type, direction) {
@@ -186,8 +187,8 @@ format_go_master <- function(res, cell_type, direction) {
   df$Cell_Type <- cell_type
   df$Direction <- direction
   
-  df %>% select(ID, Description, ONTOLOGY, GeneRatio, BgRatio, pvalue, p.adjust, qvalue,
-                Count, Genes, Cell_Type, Direction, GeneRatio_num)
+  df %>% dplyr::select(ID, Description, ONTOLOGY, GeneRatio, BgRatio, pvalue, p.adjust, qvalue,
+                       Count, Genes, Cell_Type, Direction, GeneRatio_num)
 }
 
 format_mp_master <- function(mp_res, cell_type, direction) {
@@ -217,7 +218,7 @@ format_mp_master <- function(mp_res, cell_type, direction) {
     stringsAsFactors = FALSE
   )
   
-  out %>% filter(!is.na(ID))
+  out %>% dplyr::filter(!is.na(ID))
 }
 
 process_file <- function(file_path, p = NULL) {
@@ -236,21 +237,21 @@ process_file <- function(file_path, p = NULL) {
   if (is.null(tb_raw)) { message("  Ошибка при чтении файла ", file_path, ". Пропускаем."); return(NULL) }
   
   tb <- tb_raw %>%
-    rename(gene = names, log2FoldChange = logfoldchanges, padj = pvals_adj) %>%
-    select(gene, log2FoldChange, padj) %>%
-    filter(!is.na(gene), !is.na(log2FoldChange), !is.na(padj))
+    dplyr::rename(gene = names, log2FoldChange = logfoldchanges, padj = pvals_adj) %>%
+    dplyr::select(gene, log2FoldChange, padj) %>%
+    dplyr::filter(!is.na(gene), !is.na(log2FoldChange), !is.na(padj))
   
   if (nrow(tb) == 0) { message("  Файл пустой после очистки NA. Пропускаем."); return(NULL) }
   
   tb$ENTREZID <- map_symbols_to_entrez(tb$gene)[tb$gene]
   
-  tb <- tb %>% filter(!is.na(ENTREZID))
+  tb <- tb %>% dplyr::filter(!is.na(ENTREZID))
   if (nrow(tb) == 0) { message("  Не удалось сопоставить ENTREZ ID для генов. Пропускаем."); return(NULL) }
   
   universe_genes <- unique(tb$ENTREZID)
   
-  up   <- tb %>% filter(padj < FDR_cutoff, log2FoldChange >=  logFC_cutoff)
-  down <- tb %>% filter(padj < FDR_cutoff, log2FoldChange <= -logFC_cutoff)
+  up   <- tb %>% dplyr::filter(padj < FDR_cutoff, log2FoldChange >=  logFC_cutoff)
+  down <- tb %>% dplyr::filter(padj < FDR_cutoff, log2FoldChange <= -logFC_cutoff)
   
   up_genes     <- unique(up$ENTREZID);  down_genes   <- unique(down$ENTREZID)
   up_symbols   <- unique(up$gene);      down_symbols <- unique(down$gene)
@@ -285,7 +286,6 @@ if (length(raw_files) == 0) {
 }
 
 cat("Найдено файлов для анализа:", length(raw_files), "\n")
-cat("Параллельных воркеров:", n_workers, "\n\n")
 
 plan(multisession, workers = n_workers)
 
@@ -302,9 +302,9 @@ master_go_list   <- do.call(c, lapply(results, function(r) if (is.null(r)) list(
 
 if (length(master_kegg_list) > 0) {
   master_kegg <- bind_rows(master_kegg_list) %>%
-    mutate(Cell_Type_Clean = gsub(cell_type_clean_pattern, "", Cell_Type)) %>%
-    select(Cell_Type, Cell_Type_Clean, ID, Description, GeneRatio, GeneRatio_num,
-           BgRatio, pvalue, p.adjust, qvalue, Count, Direction, Genes)
+    dplyr::mutate(Cell_Type_Clean = gsub(cell_type_clean_pattern, "", Cell_Type)) %>%
+    dplyr::select(Cell_Type, Cell_Type_Clean, ID, Description, GeneRatio, GeneRatio_num,
+                  BgRatio, pvalue, p.adjust, qvalue, Count, Direction, Genes)
   
   wb_kegg <- createWorkbook()
   addWorksheet(wb_kegg, "KEGG_Master")
@@ -312,7 +312,7 @@ if (length(master_kegg_list) > 0) {
   addFilter(wb_kegg, "KEGG_Master", row = 1, cols = 1:ncol(master_kegg))
   freezePane(wb_kegg, "KEGG_Master", firstRow = TRUE)
   
-  saveWorkbook(wb_kegg, file = file.path(output_dir, "MASTER_KEGG_ALL_CELL_TYPES.xlsx"), overwrite = TRUE)
+  saveWorkbook(wb_kegg, file = file.path(outdir, "MASTER_KEGG_ALL_CELL_TYPES.xlsx"), overwrite = TRUE)
   cat("-> Мастер-таблица KEGG сохранена (", nrow(master_kegg), "строк).\n\n")
 } else {
   cat("Значимые данные KEGG не обнаружены.\n\n")
@@ -320,9 +320,9 @@ if (length(master_kegg_list) > 0) {
 
 if (length(master_go_list) > 0) {
   master_go <- bind_rows(master_go_list) %>%
-    mutate(Cell_Type_Clean = gsub(cell_type_clean_pattern, "", Cell_Type)) %>%
-    select(Cell_Type, Cell_Type_Clean, ID, Description, ONTOLOGY, GeneRatio, GeneRatio_num,
-           BgRatio, pvalue, p.adjust, qvalue, Count, Direction, Genes)
+    dplyr::mutate(Cell_Type_Clean = gsub(cell_type_clean_pattern, "", Cell_Type)) %>%
+    dplyr::select(Cell_Type, Cell_Type_Clean, ID, Description, ONTOLOGY, GeneRatio, GeneRatio_num,
+                  BgRatio, pvalue, p.adjust, qvalue, Count, Direction, Genes)
   
   wb_go <- createWorkbook()
   addWorksheet(wb_go, "GO_MP_Master")
@@ -330,10 +330,10 @@ if (length(master_go_list) > 0) {
   addFilter(wb_go, "GO_MP_Master", row = 1, cols = 1:ncol(master_go))
   freezePane(wb_go, "GO_MP_Master", firstRow = TRUE)
   
-  saveWorkbook(wb_go, file = file.path(output_dir, "MASTER_GO_ALL_CELL_TYPES.xlsx"), overwrite = TRUE)
+  saveWorkbook(wb_go, file = file.path(outdir, "MASTER_GO_ALL_CELL_TYPES.xlsx"), overwrite = TRUE)
   cat("-> Мастер-таблица GO сохранена (", nrow(master_go), "строк).\n\n")
 } else {
   stop("Данные GO/MP не были собраны.")
 }
 cat("Время обработки всех файлов:", round(difftime(Sys.time(), t0, units = "secs"), 1), "сек.\n\n")
-cat("Готово. Мастер-таблицы сохранены в папку:", output_dir, "\n")
+cat("Готово. Мастер-таблицы сохранены в папку:", outdir, "\n")

@@ -6,8 +6,8 @@ library(openxlsx)
 library(future.apply)
 library(dplyr)
 
-input_dir <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 5 vs 6_ Egorova"
-outdir    <- "C:/Users/ES/Desktop/ФМБА/PTSD/Criteria_ORA/5 vs 6 EVS/ORA_results"
+input_dir <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/10 vs 13"
+outdir    <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 10 vs 13 EVS"
 
 logFC_cutoff <- 1
 FDR_cutoff   <- 0.05

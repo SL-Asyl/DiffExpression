@@ -1,8 +1,8 @@
 # --- Пути ---
-degs_file <- "ALL_CELL_TYPES_SIGNIFICANT_DEGs.xlsx"
-heatmap_outdir <- "Results/Heatmaps"
-volcano_outdir <- "Results/VolcanoPlots"
-heatmap_txt_dir <- "Results/Heatmaps"
+degs_file <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 10 vs 13 EVS/10 vs 13_ALL_CELL_TYPES_SIGNIFICANT_DEGs.xlsx"
+heatmap_outdir <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 10 vs 13 EVS/10 vs 13 Heatmaps"
+volcano_outdir <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 10 vs 13 EVS/10 vs 13 VolcanoPlots"
+heatmap_txt_dir <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 10 vs 13 EVS/10 vs 13 Heatmaps"
 
 # --- Heatmap настройки ---
 heatmap_width <- 6
@@ -12,7 +12,7 @@ heatmap_show_rownames <- TRUE
 heatmap_fontsize_row <- 8
 heatmap_fontsize_col <- 8
 heatmap_border <- FALSE
-heatmap_cluster_method <- "complete"  # "complete", "ward.D", "ward.D2"
+heatmap_cluster_method <- "ward.D"  # "complete", "ward.D", "ward.D2"
 heatmap_distance <- "euclidean"
 heatmap_color_low <- "#0000FF"
 heatmap_color_mid <- "#FFFFFF"
@@ -22,7 +22,7 @@ heatmap_top_n <- 50
 heatmap_min_cell_types <- 2
 
 # --- Volcano plot настройки ---
-comparison_label <- "5_vs_6"
+comparison_label <- "K18-ACE2-KI + FS vs K18-ACE2-KI + FS + par"
 figure_width <- 8
 figure_height <- 8
 p_min <- 1e-100
@@ -66,19 +66,30 @@ library(grDevices)
 # --- ГРУППИРОВКА КЛЕТОЧНЫХ ТИПОВ ---
 
 classify_cell_type <- function(ct) {
-  if (grepl("_Glut$", ct)) return("Glutamatergic")
-  if (grepl("_Gaba$", ct)) return("GABAergic")
-  if (grepl("_Inh", ct))   return("GABAergic")
-  if (ct == "Microglia_NN") return("Microglia")
-  if (grepl("_NN$", ct)) return("Glia")
+  if (grepl("[_-]Glut$", ct)) return("Glutamatergic")
+  if (grepl("[_-]Gaba$", ct)) return("GABAergic")
+  if (grepl("[_-]Inh", ct))   return("GABAergic")
+  
+  # кортикальные глутаматергические проекционные типы (любой суффикс после слоя)
+  if (grepl("^L[0-9]", ct) || grepl("[_-]CTX$", ct)) return("Glutamatergic")
+  if (grepl("[_-](IT|ET|PT|CT|NP)([_-]CTX)?$", ct)) return("Glutamatergic")
+  
+  # известные GABAergic подклассы без суффикса _Gaba
+  if (ct %in% c("Pvalb", "Lamp5", "Vip", "Sncg", "Sst")) return("GABAergic")
+  
+  if (ct == "Microglia" || ct == "Microglia_NN") return("Microglia")
+  if (ct %in% c("Astro", "Oligo", "OPC", "Endo", "Peri") ||
+      grepl("[_-]NN$", ct)) return("Glia")
+  
   return("Other")
 }
 
 group_order <- c("Glutamatergic", "GABAergic", "Glia", "Microglia")
 
 # --- ЧТЕНИЕ ДАННЫХ ---
-
+cell_type_clean_pattern <- "^10_vs_13_"
 degs <- read.xlsx(degs_file)
+degs$Cell_Type <- gsub(cell_type_clean_pattern, "", degs$Cell_Type)
 degs$Group <- sapply(degs$Cell_Type, classify_cell_type)
 
 cat("Загружено", nrow(degs), "DEGs из", length(unique(degs$Cell_Type)),
@@ -93,22 +104,22 @@ filter_genes_for_heatmap <- function(data) {
   min_ct <- min(heatmap_min_cell_types, n_ct)
 
   gene_ct_count <- data %>%
-    group_by(gene) %>%
-    summarise(n_cell_types = n_distinct(Cell_Type),
+    dplyr::group_by(gene) %>%
+    dplyr::summarise(n_cell_types = n_distinct(Cell_Type),
               min_padj = min(padj, na.rm = TRUE),
               .groups = "drop") %>%
-    filter(n_cell_types >= min_ct) %>%
-    arrange(min_padj) %>%
+    dplyr::filter(n_cell_types >= min_ct) %>%
+    dplyr::arrange(min_padj) %>%
     head(heatmap_top_n)
 
-  data %>% filter(gene %in% gene_ct_count$gene)
+  data %>% dplyr::filter(gene %in% gene_ct_count$gene)
 }
 
 build_heatmap_matrix <- function(data) {
   mat_long <- data %>%
-    select(gene, log2FoldChange, Cell_Type) %>%
-    group_by(gene, Cell_Type) %>%
-    summarise(log2FoldChange = mean(log2FoldChange), .groups = "drop") %>%
+    dplyr::select(gene, log2FoldChange, Cell_Type) %>%
+    dplyr::group_by(gene, Cell_Type) %>%
+    dplyr::summarise(log2FoldChange = mean(log2FoldChange), .groups = "drop") %>%
     pivot_wider(names_from = Cell_Type, values_from = log2FoldChange, values_fill = 0)
 
   mat <- as.matrix(mat_long[, -1])
@@ -152,6 +163,13 @@ save_heatmap_txt <- function(mat, filename) {
 draw_heatmap <- function(data, filename_base, title_text) {
   if (nrow(data) == 0) {
     cat("  Нет данных для", title_text, "- пропускаем\n")
+    return(invisible(NULL))
+  }
+  
+  # --- НОВОЕ: пропускаем группы с одним типом клеток ---
+  n_ct_in_group <- n_distinct(data$Cell_Type)
+  if (n_ct_in_group < 2) {
+    cat("  Пропускаем", title_text, "- только", n_ct_in_group, "тип(а) клеток (heatmap не строится)\n")
     return(invisible(NULL))
   }
 
@@ -224,13 +242,25 @@ draw_heatmap <- function(data, filename_base, title_text) {
 }
 
 # 1. Общая heatmap
-draw_heatmap(degs, "Heatmap_All_CellTypes", "All Cell Types DEGs")
+group_titles <- c(
+  "Glutamatergic" = "Glutamatergic neurons",
+  "GABAergic"     = "GABAergic neurons",
+  "Glia"          = "Glia",
+  "Microglia"     = "Microglia"
+)
 
-# 2-5. По группам
+draw_heatmap(degs, "Heatmap_All_CellTypes", "K18-ACE2-KI + FS vs K18-ACE2-KI + FS + par")
+
 for (grp in group_order) {
-  sub <- degs %>% filter(Group == grp)
+  
+  sub <- degs %>% dplyr::filter(Group == grp)
   fname <- paste0("Heatmap_", grp)
-  draw_heatmap(sub, fname, paste(grp, "DEGs"))
+  
+  draw_heatmap(
+    sub,
+    fname,
+    group_titles[grp]
+  )
 }
 
 cat("\n=== Все тепловые карты построены ===\n\n")
@@ -246,10 +276,10 @@ draw_volcano <- function(data, filename_base, title_text) {
   }
 
   df <- data %>%
-    mutate(
+    dplyr::mutate(
       padj = ifelse(padj < p_min, p_min, padj),
       neg_log10_padj = -log10(padj),
-      Category = case_when(
+      Category = dplyr::case_when(
         log2FoldChange >= log2(fc_cutoff) & padj <= fdr_cutoff ~ "Upregulated",
         log2FoldChange <= -log2(fc_cutoff) & padj <= fdr_cutoff ~ "Downregulated",
         TRUE ~ "Not significant"
@@ -270,12 +300,12 @@ draw_volcano <- function(data, filename_base, title_text) {
                  max(df$neg_log10_padj, na.rm = TRUE) * 1.05,
                  ymax)
 
-  sig_df <- df %>% filter(Category != "Not significant")
+  sig_df <- df %>% dplyr::filter(Category != "Not significant")
   label_df <- data.frame()
   if (n_label_genes > 0 && nrow(sig_df) > 0) {
-    top_by_padj <- sig_df %>% arrange(padj) %>% head(n_label_genes)
-    top_by_fc <- sig_df %>% arrange(desc(abs(log2FoldChange))) %>% head(n_label_genes)
-    label_df <- bind_rows(top_by_padj, top_by_fc) %>% distinct(gene, .keep_all = TRUE)
+    top_by_padj <- sig_df %>% dplyr::arrange(padj) %>% head(n_label_genes)
+    top_by_fc <- sig_df %>% dplyr::arrange(desc(abs(log2FoldChange))) %>% head(n_label_genes)
+    label_df <- dplyr::bind_rows(top_by_padj, top_by_fc) %>% dplyr::distinct(gene, .keep_all = TRUE)
   }
 
   n_up <- sum(df$Category == "Upregulated")
@@ -331,19 +361,28 @@ draw_volcano <- function(data, filename_base, title_text) {
 }
 
 # 1. Все DEGs
-draw_volcano(degs, "Volcano_All_DEGs", "All DEGs")
+draw_volcano(degs, "10 vs 13 Volcano plot", "K18-ACE2-KI + FS vs K18-ACE2-KI + FS + par")
 
 # 2-5. По группам
 volcano_groups <- list(
-  list(name = "Glutamatergic", file = "Volcano_Glutamatergic"),
-  list(name = "GABAergic",     file = "Volcano_GABAergic"),
-  list(name = "Glia",          file = "Volcano_Glia"),
-  list(name = "Microglia",     file = "Volcano_Microglia")
+  list(group = "Glutamatergic", title = "Glutamatergic neurons",
+       file = "Volcano_Glutamatergic"),
+  list(group = "GABAergic",     title = "GABAergic neurons",
+       file = "Volcano_GABAergic"),
+  list(group = "Glia",          title = "Glia",
+       file = "Volcano_Glia"),
+  list(group = "Microglia",     title = "Microglia",
+       file = "Volcano_Microglia")
 )
 
 for (vg in volcano_groups) {
-  sub <- degs %>% filter(Group == vg$name)
-  draw_volcano(sub, vg$file, paste(vg$name, "DEGs"))
+  sub <- degs %>% dplyr::filter(Group == vg$group)
+  
+  draw_volcano(
+    sub,
+    vg$file,
+    vg$title
+  )
 }
 
 cat("\n=== Все volcano plots построены ===\n")

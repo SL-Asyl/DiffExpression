@@ -1,8 +1,8 @@
 # --- Пути ---
-go_master_file   <- "MASTER_GO_ALL_CELL_TYPES.xlsx"
-kegg_master_file <- "MASTER_KEGG_ALL_CELL_TYPES.xlsx"
-output_dir       <- "Results/Filtration"
-plots_dir        <- "Results/EnrichmentPlots"
+go_master_file   <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 10 vs 13 EVS/10 vs 13_MASTER_GO_ALL_CELL_TYPES.xlsx"
+kegg_master_file <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 10 vs 13 EVS/10 vs 13_MASTER_KEGG_ALL_CELL_TYPES.xlsx"
+output_dir       <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 10 vs 13 EVS"
+plots_dir        <- "C:/Users/ES/Desktop/ФМБА/PTSD/PTSD_ PFC difexp_Egorova/PFC 10 vs 13 EVS/EnrichmentPlots"
 
 # --- Параметры семантической фильтрации ---
 # rrvgo: работает офлайн через GO.db, вычисляет попарное семантическое сходство
@@ -271,6 +271,8 @@ draw_bubble_plot <- function(data, filename_base, title_text, require_success = 
   cat("  Bubble plot сохранён:", filename_base, ".png\n")
   return(TRUE)
 }
+
+
 
 # --- Без фильтрации ---
 cat("--- Bubble plots БЕЗ фильтрации ---\n")
