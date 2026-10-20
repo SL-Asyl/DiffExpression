@@ -1,4 +1,31 @@
-.Rproj.user
-.Rhistory
+# --- временные файлы и сессии R (не коммитить) ---
+.RDataTmp
+.RDataTmp*
 .RData
-.Ruserdata
+.Rhistory
+.Rapp.history
+*.Rproj.user/
+.Rproj.user/
+*.rproj.bak
+
+# --- результаты прогона пайплайна (пересоздаются командами) ---
+# списки генов модулей и общие результаты в BASE_DIR
+module_*_genes.txt
+common_genes_wide_log2FC.xlsx
+Fig_module_*.png
+Fig_submodule_*.png
+Prism_interaction/
+
+# выходные таблицы и картинки в папках-выходах (если BASE_DIR внутри репозитория)
+*_SIGNIFICANT_DEGs.xlsx
+*_MASTER_GO_ALL_CELL_TYPES.xlsx
+*_MASTER_KEGG_ALL_CELL_TYPES.xlsx
+*_MASTER_GO_FILTERED.xlsx
+*_MASTER_GSEA.xlsx
+EnrichmentPlots/
+* Heatmaps/
+* VolcanoPlots/
+
+# --- системное ---
+.DS_Store
+Thumbs.db
