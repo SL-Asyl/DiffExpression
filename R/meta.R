@@ -8,7 +8,7 @@ box::use(R/core/helpers[parse_dataset])
 box::use(
   R/data/degs, R/data/master, R/data/rrvgo,
   R/figures/fig_bubble, R/figures/fig_volcano, R/figures/fig_heatmap_deg,
-  R/analysis/mod_select, R/figures/fig_modules,
+  R/analysis/mod_select,
   R/analysis/graphpad, R/analysis/common_genes
 )
 
@@ -26,13 +26,11 @@ figures <- function() {
     d <- parse_dataset(key); cat("\n===== figures:", key, "=====\n")
     fig_bubble$run(d$tissue, d$cc); fig_volcano$run(d$tissue, d$cc); fig_heatmap_deg$run(d$tissue, d$cc)
   }
-  fig_modules$hpc_adhesion(); fig_modules$hpc_ion(); fig_modules$pfc_energy(); fig_modules$pfc_excit()
 }
 
 #' @export
 modules <- function() {
-  mod_select$hpc(); mod_select$pfc_energy(); mod_select$pfc_excit()
-  fig_modules$hpc_adhesion(); fig_modules$hpc_ion(); fig_modules$pfc_energy(); fig_modules$pfc_excit()
+  mod_select$hpc(); mod_select$pfc()
 }
 
 #' @export

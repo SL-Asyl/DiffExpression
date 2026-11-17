@@ -36,7 +36,7 @@ options(box.path = unique(c(.root, getOption("box.path"))))
 box::use(
   R/config,
   R/data/degs, R/data/master, R/data/rrvgo, R/data/gsea,
-  R/figures/fig_bubble, R/figures/fig_volcano, R/figures/fig_heatmap_deg, R/figures/fig_modules,
+  R/figures/fig_bubble, R/figures/fig_volcano, R/figures/fig_heatmap_deg,
   R/analysis/graphpad, R/analysis/common_genes,
   R/analysis/mod_select, R/meta
 )
@@ -51,15 +51,10 @@ dispatch <- function(scenario) {
          fig_bubble           = fig_bubble$run(tis, cc),
          fig_volcano          = fig_volcano$run(tis, cc),
          fig_heatmap_deg      = fig_heatmap_deg$run(tis, cc),
-         fig_mod_hpc_adhesion = fig_modules$hpc_adhesion(),
-         fig_mod_hpc_ion      = fig_modules$hpc_ion(),
-         fig_mod_pfc_energy   = fig_modules$pfc_energy(),
-         fig_mod_pfc_excit    = fig_modules$pfc_excit(),
          graphpad             = graphpad$run(),
          common_genes         = common_genes$run(),
          mod_hpc              = mod_select$hpc(),
-         mod_pfc_energy       = mod_select$pfc_energy(),
-         mod_pfc_excit        = mod_select$pfc_excit(),
+         mod_pfc              = mod_select$pfc(),
          prep                 = meta$prep(),
          figures              = meta$figures(),
          modules              = meta$modules(),

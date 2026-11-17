@@ -64,7 +64,7 @@ resolve_raw_dir <- function(tissue, cc) {
   key <- paste0(tissue, "_", cc)
   d <- if (key %in% names(RAW_DIRS)) RAW_DIRS[[key]] else NA_character_
   if ((is.na(d) || !nzchar(d)) && isTRUE(RAW_CHOOSE_INTERACTIVE)) {
-    msg <- sprintf("Выберите папку с сырыми scanpy-таблицами для %s %s", tissue, TAG[[cc]])
+    msg <- sprintf("Выберите папку с сырыми таблицами ДЭ для %s %s", tissue, TAG[[cc]])
     message(msg)
     d <- tryCatch(utils::choose.dir(caption = msg), error = function(e) NA_character_)
     if (is.na(d) || !nzchar(d)) d <- trimws(readline(paste0(msg, "\nВведите путь: ")))
